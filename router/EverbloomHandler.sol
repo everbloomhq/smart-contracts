@@ -75,18 +75,18 @@ contract EverbloomHandler is IExchangeHandler, LibMath {
     view
     returns (uint256 availableToFill, uint256 feePercentage)
     {
-        Common.Order memory ebOrder = getOrder(data);
-        Common.OrderInfo memory orderInfo = EXCHANGE.getOrderInfo(ebOrder);
-        if ((ebOrder.taker != address(0) && ebOrder.taker != address(this)) ||
-            ebOrder.minimumTakerAmount > 0 ||
-            ebOrder.minimumTakerAmount > 0 ||
+        Common.Order memory order = getOrder(data);
+        Common.OrderInfo memory orderInfo = EXCHANGE.getOrderInfo(order);
+        if ((order.taker != address(0) && order.taker != address(this)) ||
+            order.minimumTakerAmount > 0 ||
+            order.minimumTakerAmount > 0 ||
             orderInfo.orderStatus != 4
         ) {
             availableToFill = 0;
         } else {
-            availableToFill = sub(ebOrder.takerAmount, orderInfo.filledTakerAmount);
+            availableToFill = sub(order.takerAmount, orderInfo.filledTakerAmount);
         }
-        feePercentage = EXCHANGE.fees(ebOrder.reseller, 2);
+        feePercentage = EXCHANGE.fees(order.reseller, 2);
     }
 
     /// Fills an order on the target exchange.
@@ -103,64 +103,64 @@ contract EverbloomHandler is IExchangeHandler, LibMath {
     returns (uint256 makerAmountReceived)
     {
         require(msg.sender == ROUTER, "SENDER_NOT_ROUTER");
-        Common.Order memory ebOrder = getOrder(data);
-        uint256 depositAmount = add(takerAmountToFill, mul(takerAmountToFill, EXCHANGE.fees(ebOrder.reseller, 2)) / (1 ether));
+        Common.Order memory order = getOrder(data);
+        uint256 depositAmount = add(takerAmountToFill, mul(takerAmountToFill, EXCHANGE.fees(order.reseller, 2)) / (1 ether));
         // Makes deposit on exchange using taker token in this contract.
-        if (ebOrder.takerToken == address(0)) {
-            IBank(ebOrder.takerTokenBank).deposit.value(depositAmount)(address(0), address(this), depositAmount, "");
+        if (order.takerToken == address(0)) {
+            IBank(order.takerTokenBank).deposit.value(depositAmount)(address(0), address(this), depositAmount, "");
         } else {
-            IERC20(ebOrder.takerToken).approve(ebOrder.takerTokenBank, depositAmount);
-            IBank(ebOrder.takerTokenBank).deposit(ebOrder.takerToken, address(this), depositAmount, "");
+            IERC20(order.takerToken).approve(order.takerTokenBank, depositAmount);
+            IBank(order.takerTokenBank).deposit(order.takerToken, address(this), depositAmount, "");
         }
         // Approves exchange to access bank.
-        IBank(ebOrder.takerTokenBank).userApprove(address(EXCHANGE), true);
+        IBank(order.takerTokenBank).userApprove(address(EXCHANGE), true);
 
         // Trades on exchange.
         Common.FillResults memory results = EXCHANGE.fillOrder(
-            ebOrder,
+            order,
             takerAmountToFill,
             false
         );
         // Withdraws maker tokens to this contract, then sends back to router.
         if (results.makerFilledAmount > 0) {
-            IBank(ebOrder.makerTokenBank).withdraw(ebOrder.makerToken, results.makerFilledAmount, "");
-            if (ebOrder.makerToken == address(0)) {
+            IBank(order.makerTokenBank).withdraw(order.makerToken, results.makerFilledAmount, "");
+            if (order.makerToken == address(0)) {
                 require(msg.sender.send(results.makerFilledAmount), "FAILED_SEND_ETH_TO_ROUTER");
             } else {
-                require(ERC20SafeTransfer.safeTransfer(ebOrder.makerToken, msg.sender, results.makerFilledAmount), "FAILED_SEND_ERC20_TO_ROUTER");
+                require(ERC20SafeTransfer.safeTransfer(order.makerToken, msg.sender, results.makerFilledAmount), "FAILED_SEND_ERC20_TO_ROUTER");
             }
         }
         makerAmountReceived = results.makerFilledAmount;
     }
 
-    /// Assembles order object in EtherDelta format.
+    /// Assembles order object in Everbloom format.
     /// @param data General order data.
-    /// @return order Order object in EtherDelta format.
+    /// @return order Order object in Everbloom format.
     function getOrder(
         bytes memory data
     )
     internal
     pure
-    returns (Common.Order memory ebOrder)
+    returns (Common.Order memory order)
     {
         uint256 makerDataOffset = data.readUint256(416);
         uint256 takerDataOffset = data.readUint256(448);
         uint256 signatureOffset = data.readUint256(480);
-        ebOrder.maker = data.readAddress(12);
-        ebOrder.taker = data.readAddress(44);
-        ebOrder.makerToken = data.readAddress(76);
-        ebOrder.takerToken = data.readAddress(108);
-        ebOrder.makerTokenBank = data.readAddress(140);
-        ebOrder.takerTokenBank = data.readAddress(172);
-        ebOrder.reseller = data.readAddress(204);
-        ebOrder.verifier = data.readAddress(236);
-        ebOrder.makerAmount = data.readUint256(256);
-        ebOrder.takerAmount = data.readUint256(288);
-        ebOrder.expires = data.readUint256(320);
-        ebOrder.nonce = data.readUint256(352);
-        ebOrder.minimumTakerAmount = data.readUint256(384);
-        ebOrder.makerData = data.slice(makerDataOffset + 32, makerDataOffset + 32 + data.readUint256(makerDataOffset));
-        ebOrder.takerData = data.slice(takerDataOffset + 32, takerDataOffset + 32 + data.readUint256(takerDataOffset));
-        ebOrder.signature = data.slice(signatureOffset + 32, signatureOffset + 32 + data.readUint256(signatureOffset));
+        order.maker = data.readAddress(12);
+        order.taker = data.readAddress(44);
+        order.makerToken = data.readAddress(76);
+        order.takerToken = data.readAddress(108);
+        order.makerTokenBank = data.readAddress(140);
+        order.takerTokenBank = data.readAddress(172);
+        order.reseller = data.readAddress(204);
+        order.verifier = data.readAddress(236);
+        order.makerAmount = data.readUint256(256);
+        order.takerAmount = data.readUint256(288);
+        order.expires = data.readUint256(320);
+        order.nonce = data.readUint256(352);
+        order.minimumTakerAmount = data.readUint256(384);
+        order.makerData = data.slice(makerDataOffset + 32, makerDataOffset + 32 + data.readUint256(makerDataOffset));
+        order.takerData = data.slice(takerDataOffset + 32, takerDataOffset + 32 + data.readUint256(takerDataOffset));
+        order.signature = data.slice(signatureOffset + 32, signatureOffset + 32 + data.readUint256(signatureOffset));
     }
 }

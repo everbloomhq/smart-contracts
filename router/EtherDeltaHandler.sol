@@ -4,6 +4,7 @@ pragma experimental ABIEncoderV2;
 import {ERC20SafeTransfer} from "../lib/ERC20SafeTransfer.sol";
 import {LibBytes} from "../lib/LibBytes.sol";
 import {LibMath} from "../lib/LibMath.sol";
+import {Ownable} from "../lib/Ownable.sol";
 import {IExchangeHandler} from "./IExchangeHandler.sol";
 import {RouterCommon} from "./RouterCommon.sol";
 
@@ -24,16 +25,16 @@ interface IERC20 {
 }
 
 /// EtherDelta implementation of exchange handler.
-contract EtherDeltaHandler is IExchangeHandler, LibMath {
+contract EtherDeltaHandler is IExchangeHandler, LibMath, Ownable {
 
     using LibBytes for bytes;
 
-    IEtherDelta public EXCHANGE;
+    IEtherDelta constant public EXCHANGE = IEtherDelta(0x8d12A197cB00D4747a1fe03395095ce2A5CC6819);
     address public ROUTER;
     address payable public FEE_ACCOUNT;
     uint256 public PROCESSING_FEE_PERCENTAGE;
 
-    struct EdOrder {
+    struct Order {
         address tokenGet;
         uint256 amountGet;
         address tokenGive;
@@ -47,14 +48,12 @@ contract EtherDeltaHandler is IExchangeHandler, LibMath {
     }
 
     constructor(
-        address exchange,
         address router,
         address payable feeAccount,
         uint256 processingFeePercentage
     )
     public
     {
-        EXCHANGE = IEtherDelta(exchange);
         ROUTER = router;
         FEE_ACCOUNT = feeAccount;
         PROCESSING_FEE_PERCENTAGE = processingFeePercentage;
@@ -63,7 +62,18 @@ contract EtherDeltaHandler is IExchangeHandler, LibMath {
     /// Fallback function to receive ETH.
     function() external payable {}
 
-    /// Gets maximum available amount can be spent on order (order fee included).
+    /// Sets fee account. Only contract owner can call this function.
+    /// @param feeAccount Fee account address.
+    function setFeeAccount(
+        address payable feeAccount
+    )
+    external
+    onlyOwner
+    {
+        FEE_ACCOUNT = feeAccount;
+    }
+
+    /// Gets maximum available amount can be spent on order (fee not included).
     /// @param data General order data.
     /// @return availableToFill Amount can be spent on order.
     /// @return feePercentage Fee percentage of order.
@@ -74,18 +84,18 @@ contract EtherDeltaHandler is IExchangeHandler, LibMath {
     view
     returns (uint256 availableToFill, uint256 feePercentage)
     {
-        EdOrder memory edOrder = getOrder(data);
+        Order memory order = getOrder(data);
         availableToFill = EXCHANGE.availableVolume(
-            edOrder.tokenGet,
-            edOrder.amountGet,
-            edOrder.tokenGive,
-            edOrder.amountGive,
-            edOrder.expires,
-            edOrder.nonce,
-            edOrder.user,
-            edOrder.v,
-            edOrder.r,
-            edOrder.s
+            order.tokenGet,
+            order.amountGet,
+            order.tokenGive,
+            order.amountGive,
+            order.expires,
+            order.nonce,
+            order.user,
+            order.v,
+            order.r,
+            order.s
         );
         feePercentage = add(EXCHANGE.feeTake(), PROCESSING_FEE_PERCENTAGE);
     }
@@ -104,7 +114,7 @@ contract EtherDeltaHandler is IExchangeHandler, LibMath {
     returns (uint256 makerAmountReceived)
     {
         require(msg.sender == ROUTER, "SENDER_NOT_ROUTER");
-        EdOrder memory edOrder = getOrder(data);
+        Order memory order = getOrder(data);
         uint256 exchangeFeePercentage = EXCHANGE.feeTake();
         uint256 exchangeFee = mul(takerAmountToFill, exchangeFeePercentage) / (1 ether);
         uint256 processingFee = sub(
@@ -112,77 +122,77 @@ contract EtherDeltaHandler is IExchangeHandler, LibMath {
             exchangeFee
         );
         uint256 depositAmount = add(takerAmountToFill, exchangeFee);
-        makerAmountReceived = getPartialAmountFloor(edOrder.amountGive, edOrder.amountGet, takerAmountToFill);
+        makerAmountReceived = getPartialAmountFloor(order.amountGive, order.amountGet, takerAmountToFill);
 
         // Makes deposit on exchange and pays processing fee using taker token in this contract.
-        if (edOrder.tokenGet == address(0)) {
+        if (order.tokenGet == address(0)) {
             EXCHANGE.deposit.value(depositAmount)();
             if (processingFee > 0) {
                 require(FEE_ACCOUNT.send(processingFee), "FAILED_SEND_ETH_TO_FEE_ACCOUNT");
             }
         } else {
-            require(IERC20(edOrder.tokenGet).approve(address(EXCHANGE), depositAmount));
-            EXCHANGE.depositToken(edOrder.tokenGet, depositAmount);
+            require(IERC20(order.tokenGet).approve(address(EXCHANGE), depositAmount));
+            EXCHANGE.depositToken(order.tokenGet, depositAmount);
             if (processingFee > 0) {
-                require(ERC20SafeTransfer.safeTransfer(edOrder.tokenGet, FEE_ACCOUNT, processingFee), "FAILED_SEND_ERC20_TO_FEE_ACCOUNT");
+                require(ERC20SafeTransfer.safeTransfer(order.tokenGet, FEE_ACCOUNT, processingFee), "FAILED_SEND_ERC20_TO_FEE_ACCOUNT");
             }
         }
 
         // Trades on exchange.
-        trade(edOrder, takerAmountToFill);
+        trade(order, takerAmountToFill);
 
         // Withdraws maker tokens to this contract, then sends back to router.
-        if (edOrder.tokenGive == address(0)) {
+        if (order.tokenGive == address(0)) {
             EXCHANGE.withdraw(makerAmountReceived);
             require(msg.sender.send(makerAmountReceived), "FAILED_SEND_ETH_TO_ROUTER");
         } else {
-            EXCHANGE.withdrawToken(edOrder.tokenGive, makerAmountReceived);
-            require(ERC20SafeTransfer.safeTransfer(edOrder.tokenGive, msg.sender, makerAmountReceived), "FAILED_SEND_ERC20_TO_ROUTER");
+            EXCHANGE.withdrawToken(order.tokenGive, makerAmountReceived);
+            require(ERC20SafeTransfer.safeTransfer(order.tokenGive, msg.sender, makerAmountReceived), "FAILED_SEND_ERC20_TO_ROUTER");
         }
     }
 
     /// Trade on EtherDelta exchange.
-    /// @param edOrder Order object in EtherDelta format.
+    /// @param order Order object in EtherDelta format.
     function trade(
-        EdOrder memory edOrder,
+        Order memory order,
         uint256 takerAmountToFill
     )
     internal
     {
         EXCHANGE.trade(
-            edOrder.tokenGet,
-            edOrder.amountGet,
-            edOrder.tokenGive,
-            edOrder.amountGive,
-            edOrder.expires,
-            edOrder.nonce,
-            edOrder.user,
-            edOrder.v,
-            edOrder.r,
-            edOrder.s,
+            order.tokenGet,
+            order.amountGet,
+            order.tokenGive,
+            order.amountGive,
+            order.expires,
+            order.nonce,
+            order.user,
+            order.v,
+            order.r,
+            order.s,
             takerAmountToFill
         );
     }
 
     /// Assembles order object in EtherDelta format.
     /// @param data General order data.
-    /// @return edOrder Order object in EtherDelta format.
+    /// @return order Order object in EtherDelta format.
     function getOrder(
         bytes memory data
     )
     internal
     pure
-    returns (EdOrder memory edOrder)
+    returns (Order memory order)
     {
-        edOrder.tokenGet = data.readAddress(12);
-        edOrder.amountGet = data.readUint256(32);
-        edOrder.tokenGive = data.readAddress(76);
-        edOrder.amountGive = data.readUint256(96);
-        edOrder.expires = data.readUint256(128);
-        edOrder.nonce = data.readUint256(160);
-        edOrder.user = data.readAddress(204);
-        edOrder.v = uint8(data.readUint256(224));
-        edOrder.r = data.readBytes32(256);
-        edOrder.s = data.readBytes32(288);
+        order.tokenGet = data.readAddress(12);
+        order.amountGet = data.readUint256(32);
+        order.tokenGive = data.readAddress(76);
+        order.amountGive = data.readUint256(96);
+        order.expires = data.readUint256(128);
+        order.nonce = data.readUint256(160);
+        order.user = data.readAddress(204);
+        order.v = uint8(data.readUint256(224));
+        order.r = data.readBytes32(256);
+        order.s = data.readBytes32(288);
     }
 }
