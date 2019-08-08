@@ -29,7 +29,9 @@ Due to compatibility reasons, currently the router only support ERC20 token trad
 
 ## Deployed Contract Addresses
 - ERC20Bank - [0x21f01a22c417864b20fc9ccbb9b709ad38a9ea8d](https://etherscan.io/address/0x21f01a22c417864b20fc9ccbb9b709ad38a9ea8d)
+- BankUtil - [0x0388ddf9e128605138aa9d470e34966b7114c5c1](https://etherscan.io/address/0x0388ddf9e128605138aa9d470e34966b7114c5c1)
 - EverbloomExchange - [0x146f603102d322c1aebf3d7be8b2d54e64e33327](https://etherscan.io/address/0x146f603102d322c1aebf3d7be8b2d54e64e33327)
 - ExchangeRouter - [0xcd35a7d24a5dba901da340f65a06a19d47a70bf1](https://etherscan.io/address/0xcd35a7d24a5dba901da340f65a06a19d47a70bf1)
-- EtherDeltaHandler - [0xe714d749ab43fb7105b60350f1e56eb57a617e68](https://etherscan.io/address/0xe714d749ab43fb7105b60350f1e56eb57a617e68)
-- BankUtil - [0x0388ddf9e128605138aa9d470e34966b7114c5c1](https://etherscan.io/address/0x0388ddf9e128605138aa9d470e34966b7114c5c1)
+- EtherDeltaHandler - [0xa838b13a913f1024ee99cab7335aebf15add5f38](https://etherscan.io/address/0xa838b13a913f1024ee99cab7335aebf15add5f38)
+- ZeroExV2Handler - [0x6e7d8acccbe37a8fea899af1e0eb2cfa6a408ee8](https://etherscan.io/address/0x6e7d8acccbe37a8fea899af1e0eb2cfa6a408ee8)
+- UniswapHandler - [0xc4b8673b083c2bccb67968a0236539ae5266b844](https://etherscan.io/address/0xc4b8673b083c2bccb67968a0236539ae5266b844)

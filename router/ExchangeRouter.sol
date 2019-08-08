@@ -68,7 +68,7 @@ contract ExchangeRouter is Ownable, ReentrancyGuard, LibMath {
     {
         results = fillOrderInternal(
             order,
-                takerAmountToFill,
+            takerAmountToFill,
             allowInsufficient
         );
     }

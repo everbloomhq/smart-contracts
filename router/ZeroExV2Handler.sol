@@ -81,7 +81,7 @@ contract ZeroExV2Handler is IExchangeHandler, LibMath, Ownable {
 
     using LibBytes for bytes;
 
-    ZeroExV2Exchange constant public EXCHANGE = ZeroExV2Exchange(0x4F833a24e1f95D70F028921e27040Ca56E09AB0b);
+    ZeroExV2Exchange constant public EXCHANGE = ZeroExV2Exchange(0x080bf510FCbF18b91105470639e9561022937712);
     address constant public WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address public ROUTER;
     address payable public FEE_ACCOUNT;
